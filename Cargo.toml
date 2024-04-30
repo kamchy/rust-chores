@@ -12,3 +12,6 @@ repository = "https://github.com/kamchy/chores"
 chrono = "0.4.38"
 clap = { version = "4.0", features = ["derive"] }
 human-panic = "2.0.0"
+rusqlite = {version = "0.31.0", features = ["bundled"]}
+
+

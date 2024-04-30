@@ -1,6 +1,8 @@
-use chrono::Duration;
+use std::path::PathBuf;
+
 use clap::{Parser, Subcommand};
 use human_panic::setup_panic;
+mod data;
 /// Search for a pattern in a file and display the lines that contain it.
 #[derive(Parser)]
 #[command(name = "Chores")]
@@ -34,41 +36,27 @@ enum Commands {
     Assign {
         /// whom to assing
         #[arg(short, long)]
-        person: String,
+        person: i32,
         /// what chore to assign
         #[arg(short, long)]
-        chore: String,
+        chore: i32,
     },
 }
 
-fn add_person(name: &str) {
-    println!("Adding person {name:?}")
-}
-
-fn add_chore(description: &str, level: u8, freq_days: Duration) {
-    let next_date = chrono::Local::now() + freq_days;
-    let formatted = next_date.format("%Y-%m-%d");
-    println!("Adding chore {description:?} with level {level:?} - days left: {freq_days:?} which means {formatted:?} ")
-}
-
-fn report() {
-    println!("reporting")
-}
-
-fn assign(person: &str, chore: &str) {
-    println!("Assining {person} to {chore}")
-}
-fn main() {
-    setup_panic!();
+fn dispatch(d: &mut impl data::Data) {
     let args = Cli::parse();
-    match &args.command {
-        Commands::AddPerson { name } => add_person(name),
+    let _ = match &args.command {
+        Commands::AddPerson { name } => d.add_person(name),
         Commands::AddChore {
             description,
             level,
             freq_days,
-        } => add_chore(description, *level, Duration::days(*freq_days as i64)),
-        Commands::Report => report(),
-        Commands::Assign { person, chore } => assign(person, chore),
-    }
+        } => d.add_chore(description, *level, *freq_days),
+        Commands::Report => d.report().map(|_| 0),
+        Commands::Assign { person, chore } => d.assign(*person, *chore),
+    };
+}
+fn main() {
+    setup_panic!();
+    dispatch(&mut data::db(&PathBuf::from("./test.db")))
 }

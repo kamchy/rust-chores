@@ -9,9 +9,11 @@ repository = "https://github.com/kamchy/chores"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+anyhow = "1.0.82"
 chrono = "0.4.38"
 clap = { version = "4.0", features = ["derive"] }
 human-panic = "2.0.0"
 rusqlite = {version = "0.31.0", features = ["bundled"]}
+thiserror = "1.0.59"
 
 

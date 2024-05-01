@@ -1,20 +1,36 @@
-use std::path::PathBuf;
-
 use chrono::Duration;
-use rusqlite::{Connection, Result};
+use rusqlite::{Connection, DatabaseName};
+use std::path::PathBuf;
+use std::result::Result;
+use thiserror::Error;
+
+#[derive(Debug, thiserror::Error)]
+pub enum DataError {
+    #[error("Could not insert")]
+    InsertError(#[from] rusqlite::Error),
+    #[error("Could not select")]
+    SelectError,
+    #[error("Cannot open database at {0}")]
+    DbOpenError(PathBuf),
+}
 pub trait Data {
-    fn add_person(self: &mut Self, name: &str) -> Result<usize>;
-    fn add_chore(self: &mut Self, description: &str, level: u8, freq_days: u8) -> Result<usize>;
-    fn report(self: &Self) -> Result<()>;
+    fn add_person(self: &mut Self, name: &str) -> Result<usize, DataError>;
+    fn add_chore(
+        self: &mut Self,
+        description: &str,
+        level: u8,
+        freq_days: u8,
+    ) -> Result<usize, DataError>;
+    fn report(self: &Self) -> Result<(), DataError>;
     /// id could be internal type
-    fn assign(self: &mut Self, person_id: i32, chore_id: i32) -> Result<usize>;
+    fn assign(self: &mut Self, person_id: i32, chore_id: i32) -> Result<usize, DataError>;
 }
 
 pub struct RusqData {
     conn: Connection,
 }
 impl RusqData {
-    fn new(path: &PathBuf) -> Result<Self> {
+    fn new(path: &PathBuf) -> Result<Self, DataError> {
         let conn = Connection::open(path)?;
         conn.execute(
             "CREATE TABLE  IF NOT EXISTS person(
@@ -22,7 +38,7 @@ impl RusqData {
                 name TEXT NOT NULL
             ) ",
             (),
-        )?;
+        );
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS chore (
@@ -76,23 +92,28 @@ fn date_from(d: chrono::DateTime<chrono::Local>, after_days: u8) -> String {
 pub struct EchoData;
 
 impl Data for EchoData {
-    fn add_person(self: &mut Self, name: &str) -> Result<usize> {
+    fn add_person(self: &mut Self, name: &str) -> Result<usize, DataError> {
         println!("Adding person {name:?}");
         Ok(1)
     }
 
-    fn add_chore(self: &mut Self, description: &str, level: u8, freq_days: u8) -> Result<usize> {
+    fn add_chore(
+        self: &mut Self,
+        description: &str,
+        level: u8,
+        freq_days: u8,
+    ) -> Result<usize, DataError> {
         let formatted = date_from(chrono::Local::now(), freq_days);
         println!("Adding chore {description:?} with level {level:?} - days left: {freq_days:?} which means {formatted:?} ");
         Ok(1)
     }
 
-    fn report(self: &Self) -> Result<()> {
+    fn report(self: &Self) -> Result<(), DataError> {
         println!("reporting");
         Ok(())
     }
 
-    fn assign(self: &mut Self, person: i32, chore: i32) -> Result<usize> {
+    fn assign(self: &mut Self, person: i32, chore: i32) -> Result<usize, DataError> {
         println!("Assining {person} to {chore}");
         Ok(1)
     }
@@ -101,82 +122,41 @@ impl Data for EchoData {
 /// using rusql driver library
 
 impl Data for RusqData {
-    fn add_person(self: &mut Self, n: &str) -> Result<usize> {
+    fn add_person(self: &mut Self, n: &str) -> Result<usize, DataError> {
         let p = Person {
             id: 0,
             name: n.to_string(),
         };
         self.conn
             .execute("INSERT INTO person (name) VALUES (?1)", [p.name])
+            .map_err(|r| DataError::InsertError(r))
     }
 
-    fn add_chore(self: &mut Self, description: &str, level: u8, freq_days: u8) -> Result<usize> {
+    fn add_chore(
+        self: &mut Self,
+        description: &str,
+        level: u8,
+        freq_days: u8,
+    ) -> Result<usize, DataError> {
         let c = Chore {
             id: 0,
             level,
             frequency: freq_days,
             description: description.to_string(),
         };
-        self.conn.execute(
-            " INSERT INTO chore(description, level, frequency) VALUES (?1, ?2, ?3)",
-            (c.description, c.level, c.frequency),
-        )
+        self.conn
+            .execute(
+                " INSERT INTO chore(description, level, frequency) VALUES (?1, ?2, ?3)",
+                (c.description, c.level, c.frequency),
+            )
+            .map_err(|r| DataError::InsertError(r))
     }
 
-    fn report(self: &Self) -> Result<()> {
-        let mut person_stmt = self.conn.prepare("SELECT id, name FROM person")?;
-        let person_iter = person_stmt.query_map([], |row| {
-            let id = row.get(0)?;
-            let name: String = row.get(1)?;
-            Ok(Person { id, name })
-        })?;
-
-        let mut chore_stmnt = self
-            .conn
-            .prepare("SELECT id, description, level, frequency FROM chore")?;
-        let chore_iter = chore_stmnt.query_map([], |row| {
-            let id = row.get(0)?;
-            let description = row.get(1)?;
-            let level = row.get(2)?;
-            let frequency = row.get(3)?;
-            Ok(Chore {
-                id,
-                description,
-                level,
-                frequency,
-            })
-        })?;
-        let mut assignment_stmnt = self
-            .conn
-            .prepare("SELECT id, person_id, chore_id FROM assignment")?;
-
-        let assignment_iter = assignment_stmnt.query_map([], |row| {
-            let id = row.get(0)?;
-            let person_id = row.get(1)?;
-            let chore_id = row.get(2)?;
-            Ok(Assignment {
-                id,
-                person_id,
-                chore_id,
-            })
-        })?;
-
-        for person in person_iter {
-            println!("{:?}", person)
-        }
-
-        for chore in chore_iter {
-            println!("{:?}", chore)
-        }
-
-        for assignment in assignment_iter {
-            println!("{:?}", assignment)
-        }
-
-        Ok(())
+    fn report(self: &Self) -> Result<(), DataError> {
+        print_all(&self.conn)
     }
 
-    fn assign(self: &mut Self, person_id: i32, chore_id: i32) -> Result<usize> {
+    fn assign(self: &mut Self, person_id: i32, chore_id: i32) -> Result<usize, DataError> {
         let assignment = Assignment {
             id: 0,
             person_id,
@@ -188,6 +168,55 @@ impl Data for RusqData {
         )?;
         Ok(0)
     }
+}
+
+fn print_all(conn: &Connection) -> Result<(), DataError> {
+    let mut person_stmt = conn.prepare("SELECT id, name FROM person")?;
+    let person_iter = person_stmt.query_map([], |row| {
+        let id = row.get(0)?;
+        let name: String = row.get(1)?;
+        Ok(Person { id, name })
+    })?;
+
+    let mut chore_stmnt = conn.prepare("SELECT id, description, level, frequency FROM chore")?;
+    let chore_iter = chore_stmnt.query_map([], |row| {
+        let id = row.get(0)?;
+        let description = row.get(1)?;
+        let level = row.get(2)?;
+        let frequency = row.get(3)?;
+        Ok(Chore {
+            id,
+            description,
+            level,
+            frequency,
+        })
+    })?;
+    let mut assignment_stmnt = conn.prepare("SELECT id, person_id, chore_id FROM assignment")?;
+
+    let assignment_iter = assignment_stmnt.query_map([], |row| {
+        let id = row.get(0)?;
+        let person_id = row.get(1)?;
+        let chore_id = row.get(2)?;
+        Ok(Assignment {
+            id,
+            person_id,
+            chore_id,
+        })
+    })?;
+
+    for person in person_iter {
+        println!("{:?}", person)
+    }
+
+    for chore in chore_iter {
+        println!("{:?}", chore)
+    }
+
+    for assignment in assignment_iter {
+        println!("{:?}", assignment)
+    }
+
+    Ok(())
 }
 pub fn db(path: &PathBuf) -> RusqData {
     RusqData::new(path).unwrap()

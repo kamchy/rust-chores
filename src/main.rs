@@ -1,7 +1,7 @@
-use std::path::PathBuf;
-
+use anyhow::Result;
 use clap::{Parser, Subcommand};
 use human_panic::setup_panic;
+use std::path::PathBuf;
 mod data;
 /// Search for a pattern in a file and display the lines that contain it.
 #[derive(Parser)]
@@ -43,7 +43,7 @@ enum Commands {
     },
 }
 
-fn dispatch(d: &mut impl data::Data) {
+fn dispatch(d: &mut impl data::Data) -> Result<(), data::DataError> {
     let args = Cli::parse();
     let _ = match &args.command {
         Commands::AddPerson { name } => d.add_person(name),
@@ -55,8 +55,9 @@ fn dispatch(d: &mut impl data::Data) {
         Commands::Report => d.report().map(|_| 0),
         Commands::Assign { person, chore } => d.assign(*person, *chore),
     };
+    Ok(())
 }
-fn main() {
+fn main() -> Result<(), data::DataError> {
     setup_panic!();
     dispatch(&mut data::db(&PathBuf::from("./test.db")))
 }

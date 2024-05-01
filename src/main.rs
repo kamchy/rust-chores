@@ -45,17 +45,16 @@ enum Commands {
 
 fn dispatch(d: &mut impl data::Data) -> Result<(), data::DataError> {
     let args = Cli::parse();
-    let _ = match &args.command {
+    match &args.command {
         Commands::AddPerson { name } => d.add_person(name),
         Commands::AddChore {
             description,
             level,
             freq_days,
         } => d.add_chore(description, *level, *freq_days),
-        Commands::Report => d.report().map(|_| 0),
+        Commands::Report => d.report(),
         Commands::Assign { person, chore } => d.assign(*person, *chore),
-    };
-    Ok(())
+    }
 }
 fn main() -> Result<(), data::DataError> {
     setup_panic!();

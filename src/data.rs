@@ -1,29 +1,24 @@
 use chrono::Duration;
-use rusqlite::{Connection, DatabaseName};
+use rusqlite::Connection;
 use std::path::PathBuf;
 use std::result::Result;
-use thiserror::Error;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DataError {
     #[error("Could not insert")]
     InsertError(#[from] rusqlite::Error),
-    #[error("Could not select")]
-    SelectError,
-    #[error("Cannot open database at {0}")]
-    DbOpenError(PathBuf),
 }
 pub trait Data {
-    fn add_person(self: &mut Self, name: &str) -> Result<usize, DataError>;
+    fn add_person(&mut self, name: &str) -> Result<(), DataError>;
     fn add_chore(
         self: &mut Self,
         description: &str,
         level: u8,
         freq_days: u8,
-    ) -> Result<usize, DataError>;
+    ) -> Result<(), DataError>;
     fn report(self: &Self) -> Result<(), DataError>;
     /// id could be internal type
-    fn assign(self: &mut Self, person_id: i32, chore_id: i32) -> Result<usize, DataError>;
+    fn assign(self: &mut Self, person_id: i32, chore_id: i32) -> Result<(), DataError>;
 }
 
 pub struct RusqData {
@@ -88,48 +83,20 @@ fn date_from(d: chrono::DateTime<chrono::Local>, after_days: u8) -> String {
     let formatted = next_date.format("%Y-%m-%d");
     formatted.to_string()
 }
-/// EchoData only echoes data back and does not store it
-pub struct EchoData;
 
-impl Data for EchoData {
-    fn add_person(self: &mut Self, name: &str) -> Result<usize, DataError> {
-        println!("Adding person {name:?}");
-        Ok(1)
-    }
-
-    fn add_chore(
-        self: &mut Self,
-        description: &str,
-        level: u8,
-        freq_days: u8,
-    ) -> Result<usize, DataError> {
-        let formatted = date_from(chrono::Local::now(), freq_days);
-        println!("Adding chore {description:?} with level {level:?} - days left: {freq_days:?} which means {formatted:?} ");
-        Ok(1)
-    }
-
-    fn report(self: &Self) -> Result<(), DataError> {
-        println!("reporting");
-        Ok(())
-    }
-
-    fn assign(self: &mut Self, person: i32, chore: i32) -> Result<usize, DataError> {
-        println!("Assining {person} to {chore}");
-        Ok(1)
-    }
-}
 /// Implements Data so that it is stored in sqlite database
 /// using rusql driver library
 
 impl Data for RusqData {
-    fn add_person(self: &mut Self, n: &str) -> Result<usize, DataError> {
+    fn add_person(self: &mut Self, n: &str) -> Result<(), DataError> {
         let p = Person {
             id: 0,
             name: n.to_string(),
         };
         self.conn
             .execute("INSERT INTO person (name) VALUES (?1)", [p.name])
-            .map_err(|r| DataError::InsertError(r))
+            .map_err(|e| DataError::InsertError(e))
+            .map(|_| {})
     }
 
     fn add_chore(
@@ -137,7 +104,7 @@ impl Data for RusqData {
         description: &str,
         level: u8,
         freq_days: u8,
-    ) -> Result<usize, DataError> {
+    ) -> Result<(), DataError> {
         let c = Chore {
             id: 0,
             level,
@@ -150,23 +117,26 @@ impl Data for RusqData {
                 (c.description, c.level, c.frequency),
             )
             .map_err(|r| DataError::InsertError(r))
+            .map(|_| {})
     }
 
     fn report(self: &Self) -> Result<(), DataError> {
         print_all(&self.conn)
     }
 
-    fn assign(self: &mut Self, person_id: i32, chore_id: i32) -> Result<usize, DataError> {
+    fn assign(self: &mut Self, person_id: i32, chore_id: i32) -> Result<(), DataError> {
         let assignment = Assignment {
             id: 0,
             person_id,
             chore_id,
         };
-        self.conn.execute(
-            "INSERT INTO assignment (person_id, chore_id) VALUES(?1, ?2)",
-            [assignment.person_id, assignment.chore_id],
-        )?;
-        Ok(0)
+        self.conn
+            .execute(
+                "INSERT INTO assignment (person_id, chore_id) VALUES(?1, ?2)",
+                [assignment.person_id, assignment.chore_id],
+            )
+            .map_err(|e| DataError::InsertError(e))
+            .map(|_| {})
     }
 }
 

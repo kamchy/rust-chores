@@ -9,9 +9,17 @@ use tabled::Tabled;
 pub enum DataError {
     #[error("Could not insert")]
     InsertError(#[from] rusqlite::Error),
+
+    #[error("Could not delete {table:?} with id {index:?}: \n{message:?}")]
+    DeleteError {
+        table: String,
+        index: u8,
+        message: String,
+    },
 }
 pub trait Data {
     fn add_person(&mut self, name: &str) -> Result<(), DataError>;
+    fn remove_person(&mut self, index: u8) -> Result<(), DataError>;
     fn add_chore(
         self: &mut Self,
         description: &str,
@@ -101,6 +109,16 @@ impl Data for RusqData {
             .map(|_| {})
     }
 
+    fn remove_person(self: &mut Self, index: u8) -> Result<(), DataError> {
+        self.conn
+            .execute("DELETE FROM person where id = ?1", [index])
+            .map_err(|e| DataError::DeleteError {
+                table: "person".to_owned(),
+                index,
+                message: e.to_string(),
+            })
+            .map(|_| {})
+    }
     fn add_chore(
         self: &mut Self,
         description: &str,

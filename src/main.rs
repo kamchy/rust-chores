@@ -13,10 +13,31 @@ struct Cli {
     command: Commands,
 }
 
+/// Perform operation on a person
+#[derive(Subcommand)]
+enum PersonCommand {
+    /// add a new person
+    Add {
+        /// name of the person to add
+        #[arg(short, long)]
+        name: String,
+    },
+
+    /// remove a person
+    Remove {
+        /// index of the person to remove
+        #[arg(short, long)]
+        index: u8,
+    },
+}
+
 #[derive(Subcommand)]
 enum Commands {
-    /// adds a person
-    AddPerson { name: String },
+    Person {
+        /// Operations on a person
+        #[command(subcommand)]
+        command: PersonCommand,
+    },
     /// Adds a chore with description, level and frequency
     AddChore {
         /// chore description
@@ -46,7 +67,10 @@ enum Commands {
 fn dispatch(d: &mut impl data::Data) -> Result<(), data::DataError> {
     let args = Cli::parse();
     match &args.command {
-        Commands::AddPerson { name } => d.add_person(name),
+        Commands::Person { command } => match command {
+            PersonCommand::Add { name } => d.add_person(name),
+            PersonCommand::Remove { index } => d.remove_person(*index),
+        },
         Commands::AddChore {
             description,
             level,

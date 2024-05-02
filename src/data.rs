@@ -2,6 +2,7 @@ use chrono::Duration;
 use rusqlite::Connection;
 use std::path::PathBuf;
 use std::result::Result;
+use tabled::settings::{Color, Style};
 use tabled::Tabled;
 
 #[derive(Debug, thiserror::Error)]
@@ -175,12 +176,22 @@ fn print_all(conn: &Connection) -> Result<(), DataError> {
     })?;
 
     let p: Vec<Person> = person_iter.filter_map(|r| r.ok()).collect();
-    println!("{}\n{}", p.len(), tabled::Table::new(p).to_string());
+    println!(
+        "{}\n{}",
+        p.len(),
+        tabled::Table::new(p).with(Style::rounded()).to_string()
+    );
     let c: Vec<Chore> = chore_iter.filter_map(|r| r.ok()).collect();
-    println!("{}", tabled::Table::new(c).to_string());
+    println!(
+        "{}",
+        tabled::Table::new(c).with(Style::rounded()).to_string()
+    );
 
     let a: Vec<Assignment> = assignment_iter.filter_map(|r| r.ok()).collect();
-    println!("{}", tabled::Table::new(a).to_string());
+    println!(
+        "{}",
+        tabled::Table::new(a).with(Style::rounded()).to_string()
+    );
     Ok(())
 }
 

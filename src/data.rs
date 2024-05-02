@@ -1,5 +1,7 @@
-use chrono::Duration;
+use chrono::{DateTime, Duration, FixedOffset, Local, NaiveDateTime, TimeZone};
+use rusqlite::types::FromSql;
 use rusqlite::Connection;
+use std::fs;
 use std::path::PathBuf;
 use std::result::Result;
 use tabled::settings::{Color, Style};
@@ -9,6 +11,8 @@ use tabled::Tabled;
 pub enum DataError {
     #[error("Could not insert")]
     InsertError(#[from] rusqlite::Error),
+    #[error("Cound not read query from file {0:}")]
+    QuryFilePerseError(#[from] std::io::Error),
 
     #[error("Could not delete {table:?} with id {index:?}: \n{message:?}")]
     DeleteError {
@@ -58,11 +62,20 @@ impl RusqData {
             "CREATE TABLE IF NOT EXISTS assignment(
                 id INTEGER PRIMARY  KEY AUTOINCREMENT,
                 person_id INTEGER NOT NULL REFERENCES person(id) ON DELETE CASCADE,
-               chore_id INTEGER NOT NULL REFERENCES chore(id) ON DELETE CASCADE
+                chore_id INTEGER NOT NULL REFERENCES chore(id) ON DELETE CASCADE
             ) ",
             (),
         )?;
 
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS task(
+                id INTEGER PRIMARY  KEY AUTOINCREMENT,
+                person_id INTEGER NOT NULL REFERENCES person(id) ON DELETE CASCADE,
+                chore_id INTEGER NOT NULL REFERENCES chore(id) ON DELETE CASCADE,
+                done DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+            ) ",
+            (),
+        )?;
         Ok(RusqData { conn })
     }
 }
@@ -159,8 +172,45 @@ impl Data for RusqData {
             .map(|_| {})
     }
 }
-
+#[derive(Tabled)]
+struct Schedule {
+    name: String,
+    description: String,
+    level: u8,
+    frequency: u8,
+    last: String,
+}
 fn print_all(conn: &Connection) -> Result<(), DataError> {
+    let mut stmt = conn.prepare(fs::read_to_string("src/report.sql")?.as_str())?;
+
+    let iter = stmt.query_map([], |row| {
+        let name = row.get(0)?;
+        let description = row.get(1)?;
+        let level = row.get(2)?;
+        let frequency = row.get(3)?;
+        let last = row.get(4)?;
+
+        Ok(Schedule {
+            name,
+            description,
+            level,
+            frequency,
+            last,
+        })
+    })?;
+    let report: Vec<_> = iter.filter_map(|r| r.ok()).collect();
+    println!(
+        "{}",
+        tabled::Table::new(report)
+            .with(Style::rounded())
+            .to_string()
+    );
+
+    print_vec(conn, get_persons)?;
+    print_vec(conn, get_chores)?;
+    print_vec(conn, get_assignments)
+}
+fn get_persons(conn: &Connection) -> Result<Vec<Person>, DataError> {
     let mut person_stmt = conn.prepare("SELECT id, name FROM person")?;
     let person_iter = person_stmt.query_map([], |row| {
         let id = row.get(0)?;
@@ -168,6 +218,11 @@ fn print_all(conn: &Connection) -> Result<(), DataError> {
         Ok(Person { id, name })
     })?;
 
+    let p: Vec<Person> = person_iter.filter_map(|r| r.ok()).collect();
+    Ok(p)
+}
+
+fn get_chores(conn: &Connection) -> Result<Vec<Chore>, DataError> {
     let mut chore_stmnt = conn.prepare("SELECT id, description, level, frequency FROM chore")?;
     let chore_iter = chore_stmnt.query_map([], |row| {
         let id = row.get(0)?;
@@ -181,6 +236,12 @@ fn print_all(conn: &Connection) -> Result<(), DataError> {
             frequency,
         })
     })?;
+
+    let c: Vec<Chore> = chore_iter.filter_map(|r| r.ok()).collect();
+    Ok(c)
+}
+
+fn get_assignments(conn: &Connection) -> Result<Vec<Assignment>, DataError> {
     let mut assignment_stmnt = conn.prepare("SELECT id, person_id, chore_id FROM assignment")?;
     let assignment_iter = assignment_stmnt.query_map([], |row| {
         let id = row.get(0)?;
@@ -192,23 +253,17 @@ fn print_all(conn: &Connection) -> Result<(), DataError> {
             chore_id,
         })
     })?;
-
-    let p: Vec<Person> = person_iter.filter_map(|r| r.ok()).collect();
-    println!(
-        "{}\n{}",
-        p.len(),
-        tabled::Table::new(p).with(Style::rounded()).to_string()
-    );
-    let c: Vec<Chore> = chore_iter.filter_map(|r| r.ok()).collect();
-    println!(
-        "{}",
-        tabled::Table::new(c).with(Style::rounded()).to_string()
-    );
-
     let a: Vec<Assignment> = assignment_iter.filter_map(|r| r.ok()).collect();
+    Ok(a)
+}
+fn print_vec<'a, T: Tabled>(
+    conn: &'a Connection,
+    f: fn(&'a Connection) -> Result<Vec<T>, DataError>,
+) -> Result<(), DataError> {
+    let v = f(conn)?;
     println!(
         "{}",
-        tabled::Table::new(a).with(Style::rounded()).to_string()
+        tabled::Table::new(v).with(Style::rounded()).to_string()
     );
     Ok(())
 }

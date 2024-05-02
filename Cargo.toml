@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["Kamila Chyla <kamila.chyla@gmail.com>"]
 description = "Small CLI application for managing chores in my househld"
 readme ="README.md"
-repository = "https://github.com/kamchy/chores"
+repository = "https://github.com/kamchy/rust-chores"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]

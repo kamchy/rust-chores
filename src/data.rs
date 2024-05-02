@@ -2,6 +2,7 @@ use chrono::Duration;
 use rusqlite::Connection;
 use std::path::PathBuf;
 use std::result::Result;
+use tabled::Tabled;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DataError {
@@ -33,7 +34,7 @@ impl RusqData {
                 name TEXT NOT NULL
             ) ",
             (),
-        );
+        )?;
 
         conn.execute(
             "CREATE TABLE IF NOT EXISTS chore (
@@ -57,13 +58,13 @@ impl RusqData {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Tabled)]
 struct Person {
     id: i32,
     name: String,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Tabled)]
 struct Chore {
     id: i32,
     description: String,
@@ -71,7 +72,7 @@ struct Chore {
     frequency: u8,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Tabled)]
 struct Assignment {
     id: i32,
     person_id: i32,
@@ -162,7 +163,6 @@ fn print_all(conn: &Connection) -> Result<(), DataError> {
         })
     })?;
     let mut assignment_stmnt = conn.prepare("SELECT id, person_id, chore_id FROM assignment")?;
-
     let assignment_iter = assignment_stmnt.query_map([], |row| {
         let id = row.get(0)?;
         let person_id = row.get(1)?;
@@ -174,20 +174,16 @@ fn print_all(conn: &Connection) -> Result<(), DataError> {
         })
     })?;
 
-    for person in person_iter {
-        println!("{:?}", person)
-    }
+    let p: Vec<Person> = person_iter.filter_map(|r| r.ok()).collect();
+    println!("{}\n{}", p.len(), tabled::Table::new(p).to_string());
+    let c: Vec<Chore> = chore_iter.filter_map(|r| r.ok()).collect();
+    println!("{}", tabled::Table::new(c).to_string());
 
-    for chore in chore_iter {
-        println!("{:?}", chore)
-    }
-
-    for assignment in assignment_iter {
-        println!("{:?}", assignment)
-    }
-
+    let a: Vec<Assignment> = assignment_iter.filter_map(|r| r.ok()).collect();
+    println!("{}", tabled::Table::new(a).to_string());
     Ok(())
 }
+
 pub fn db(path: &PathBuf) -> RusqData {
     RusqData::new(path).unwrap()
 }

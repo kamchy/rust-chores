@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::{builder::PathBufValueParser, Parser, Subcommand};
 use human_panic::setup_panic;
 use std::path::PathBuf;
 mod data;
@@ -11,6 +11,8 @@ mod data;
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+    #[arg(short, long, default_value = "test.db")]
+    dbpath: String,
 }
 
 /// Perform operation on a person
@@ -29,17 +31,14 @@ enum PersonCommand {
         #[arg(short, long)]
         index: u8,
     },
+    /// list all persons
+    List,
 }
 
 #[derive(Subcommand)]
-enum Commands {
-    Person {
-        /// Operations on a person
-        #[command(subcommand)]
-        command: PersonCommand,
-    },
+enum ChoreCommand {
     /// Adds a chore with description, level and frequency
-    AddChore {
+    Add {
         /// chore description
         #[arg(short, long)]
         description: String,
@@ -51,10 +50,19 @@ enum Commands {
         #[arg(short)]
         freq_days: u8,
     },
-    /// Prints report for all persons, chores and assignments
-    Report,
-    /// Assigns a person to a chore
-    Assign {
+    /// Removes a chore by providing index
+    Remove {
+        /// index of the chore to remove
+        #[arg(short, long)]
+        index: u8,
+    },
+    /// List all chores
+    List,
+}
+/// A command for managing assignments
+#[derive(Subcommand)]
+enum AssignmentCommand {
+    Add {
         /// whom to assing
         #[arg(short, long)]
         person: i32,
@@ -62,25 +70,81 @@ enum Commands {
         #[arg(short, long)]
         chore: i32,
     },
+    /// command to remove the assignment
+    Remove {
+        /// index of the assignment to remove
+        #[arg(short, long)]
+        index: u8,
+    },
+    /// List assignments
+    List,
+}
+#[derive(Subcommand)]
+enum Commands {
+    /// A command that manages persons in the household
+    Person {
+        /// Operations on a person
+        #[command(subcommand)]
+        command: PersonCommand,
+    },
+    /// A command that manages all chores
+    Chore {
+        /// Operations on a chore
+        #[command(subcommand)]
+        command: ChoreCommand,
+    },
+    /// Prints report for all persons, chores and assignments
+    Report,
+    /// Assigns a person to a chore
+    Assignment {
+        /// Operations on assignment
+        #[command(subcommand)]
+        command: AssignmentCommand,
+    },
+    Task {
+        /// whom to assing
+        #[arg(short, long)]
+        person: i32,
+        /// what chore to assign
+        #[arg(short, long)]
+        chore: i32,
+        #[arg(short, long)]
+        date: String,
+    },
 }
 
-fn dispatch(d: &mut impl data::Data) -> Result<(), data::DataError> {
+fn dispatch() -> Result<(), data::DataError> {
     let args = Cli::parse();
+    let d: &mut dyn data::Data = &mut data::db(&PathBuf::from(args.dbpath));
     match &args.command {
         Commands::Person { command } => match command {
             PersonCommand::Add { name } => d.add_person(name),
             PersonCommand::Remove { index } => d.remove_person(*index),
+            PersonCommand::List => d.list_persons(),
         },
-        Commands::AddChore {
-            description,
-            level,
-            freq_days,
-        } => d.add_chore(description, *level, *freq_days),
+        Commands::Chore { command } => match command {
+            ChoreCommand::Add {
+                description,
+                level,
+                freq_days,
+            } => d.add_chore(description, *level, *freq_days),
+            ChoreCommand::Remove { index } => d.remove_chore(*index),
+            ChoreCommand::List => d.list_chores(),
+        },
+        Commands::Assignment { command } => match command {
+            AssignmentCommand::Add { person, chore } => d.assign(*person, *chore),
+            AssignmentCommand::Remove { index } => d.remove_assignment(*index),
+            AssignmentCommand::List => d.list_assignments(),
+        },
         Commands::Report => d.report(),
-        Commands::Assign { person, chore } => d.assign(*person, *chore),
+        Commands::Task {
+            person,
+            chore,
+            date,
+        } => d.add_task(*person, *chore, date),
     }
 }
 fn main() -> Result<(), data::DataError> {
     setup_panic!();
-    dispatch(&mut data::db(&PathBuf::from("./test.db")))
+    dispatch()
 }

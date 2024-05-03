@@ -1,4 +1,5 @@
 use chrono::{DateTime, Duration, FixedOffset, Local, NaiveDateTime, TimeZone};
+use rusqlite::params;
 use rusqlite::types::FromSql;
 use rusqlite::Connection;
 use std::fs;
@@ -20,9 +21,12 @@ pub enum DataError {
         index: u8,
         message: String,
     },
+    #[error("Error when parsing data to be stored")]
+    ParseError(String),
 }
 pub trait Data {
     fn add_person(&mut self, name: &str) -> Result<(), DataError>;
+    fn list_persons(&self) -> Result<(), DataError>;
     fn remove_person(&mut self, index: u8) -> Result<(), DataError>;
     fn add_chore(
         self: &mut Self,
@@ -30,9 +34,14 @@ pub trait Data {
         level: u8,
         freq_days: u8,
     ) -> Result<(), DataError>;
+    fn remove_chore(&mut self, index: u8) -> Result<(), DataError>;
+    fn list_chores(&self) -> Result<(), DataError>;
     fn report(self: &Self) -> Result<(), DataError>;
     /// id could be internal type
     fn assign(self: &mut Self, person_id: i32, chore_id: i32) -> Result<(), DataError>;
+    fn list_assignments(&self) -> Result<(), DataError>;
+    fn remove_assignment(&mut self, index: u8) -> Result<(), DataError>;
+    fn add_task(&mut self, person_id: i32, chore_id: i32, date: &str) -> Result<(), DataError>;
 }
 
 pub struct RusqData {
@@ -44,7 +53,7 @@ impl RusqData {
         conn.execute(
             "CREATE TABLE  IF NOT EXISTS person(
                 id INTEGER PRIMARY  KEY AUTOINCREMENT,
-                name TEXT NOT NULL
+                name TEXT UNIQUE NOT NULL
             ) ",
             (),
         )?;
@@ -52,7 +61,7 @@ impl RusqData {
         conn.execute(
             "CREATE TABLE IF NOT EXISTS chore (
                 id INTEGER PRIMARY  KEY AUTOINCREMENT,
-                description TEXT NOT NULL,
+                description TEXT UNIQUE NOT NULL,
                 level INTEGER NOT NULL,
                 frequency INTEGER NOT NULL
             ) ",
@@ -121,6 +130,9 @@ impl Data for RusqData {
             .map_err(|e| DataError::InsertError(e))
             .map(|_| {})
     }
+    fn list_persons(&self) -> Result<(), DataError> {
+        print_vec(&self.conn, get_persons)
+    }
 
     fn remove_person(self: &mut Self, index: u8) -> Result<(), DataError> {
         self.conn
@@ -153,6 +165,21 @@ impl Data for RusqData {
             .map(|_| {})
     }
 
+    fn remove_chore(self: &mut Self, index: u8) -> Result<(), DataError> {
+        self.conn
+            .execute("DELETE FROM chore where id = ?1", [index])
+            .map_err(|e| DataError::DeleteError {
+                table: "chore".to_owned(),
+                index,
+                message: e.to_string(),
+            })
+            .map(|_| {})
+    }
+
+    fn list_chores(&self) -> Result<(), DataError> {
+        print_vec(&self.conn, get_chores)
+    }
+
     fn report(self: &Self) -> Result<(), DataError> {
         print_all(&self.conn)
     }
@@ -170,6 +197,37 @@ impl Data for RusqData {
             )
             .map_err(|e| DataError::InsertError(e))
             .map(|_| {})
+    }
+
+    fn remove_assignment(self: &mut Self, index: u8) -> Result<(), DataError> {
+        self.conn
+            .execute("DELETE FROM assignment where id = ?1", [index])
+            .map_err(|e| DataError::DeleteError {
+                table: "assignment".to_owned(),
+                index,
+                message: e.to_string(),
+            })
+            .map(|_| {})
+    }
+    fn list_assignments(&self) -> Result<(), DataError> {
+        print_vec(&self.conn, get_assignments)
+    }
+    fn add_task(&mut self, person_id: i32, chore_id: i32, date: &str) -> Result<(), DataError> {
+        if let Ok(_) = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d") {
+            self.conn
+                .execute(
+                    "insert into task(person_id, chore_id, done) 
+            values(?1, ?2, ?3)",
+                    params![person_id, chore_id, date],
+                )
+                .map_err(|e| DataError::InsertError(e))
+                .map(|_| {})
+        } else {
+            Err(DataError::ParseError(format!(
+                "Could not parse date {:?}, should match format %Y-%M-%D",
+                date
+            )))
+        }
     }
 }
 #[derive(Tabled)]
@@ -206,7 +264,6 @@ fn print_all(conn: &Connection) -> Result<(), DataError> {
             .to_string()
     );
 
-    print_vec(conn, get_persons)?;
     print_vec(conn, get_chores)?;
     print_vec(conn, get_assignments)
 }

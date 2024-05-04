@@ -1,3 +1,6 @@
+///! chores is a simple commandline application
+///! for managing chores and assignments of chores
+///! to people in my household.
 use anyhow::Result;
 use clap::{builder::PathBufValueParser, Parser, Subcommand};
 use human_panic::setup_panic;
@@ -113,6 +116,7 @@ enum Commands {
     },
 }
 
+/// Parses the commandline and dispatches a command on [[data::Data]].
 fn dispatch() -> Result<(), data::DataError> {
     let args = Cli::parse();
     let d: &mut dyn data::Data = &mut data::db(&PathBuf::from(args.dbpath));

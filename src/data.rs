@@ -1,11 +1,11 @@
-use chrono::{DateTime, Duration, FixedOffset, Local, NaiveDateTime, TimeZone};
+use chrono::Duration;
 use rusqlite::params;
-use rusqlite::types::FromSql;
 use rusqlite::Connection;
+use std::fmt::Display;
 use std::fs;
 use std::path::PathBuf;
 use std::result::Result;
-use tabled::settings::{Color, Style};
+use tabled::settings::Style;
 use tabled::Tabled;
 
 #[derive(Debug, thiserror::Error)]
@@ -27,6 +27,7 @@ pub enum DataError {
 pub trait Data {
     fn add_person(&mut self, name: &str) -> Result<(), DataError>;
     fn list_persons(&self) -> Result<(), DataError>;
+    fn get_persons(&self) -> Result<Vec<Person>, DataError>;
     fn remove_person(&mut self, index: u8) -> Result<(), DataError>;
     fn add_chore(
         self: &mut Self,
@@ -36,6 +37,8 @@ pub trait Data {
     ) -> Result<(), DataError>;
     fn remove_chore(&mut self, index: u8) -> Result<(), DataError>;
     fn list_chores(&self) -> Result<(), DataError>;
+
+    fn get_chores(&self) -> Result<Vec<Chore>, DataError>;
     fn report(self: &Self) -> Result<(), DataError>;
     /// id could be internal type
     fn assign(self: &mut Self, person_id: i32, chore_id: i32) -> Result<(), DataError>;
@@ -90,19 +93,32 @@ impl RusqData {
 }
 
 #[derive(Debug, Tabled)]
-struct Person {
-    id: i32,
-    name: String,
+pub struct Person {
+    pub(crate) id: i32,
+    pub(crate) name: String,
+}
+impl Display for Person {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("{} (id:{:0>4})", self.name, self.id))
+    }
 }
 
 #[derive(Debug, Tabled)]
-struct Chore {
-    id: i32,
-    description: String,
+pub struct Chore {
+    pub(crate) id: i32,
+    pub(crate) description: String,
     level: u8,
-    frequency: u8,
+    pub(crate) frequency: u8,
 }
 
+impl Display for Chore {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!(
+            "{} (id:{:0>4}) [fr: {}]",
+            self.description, self.id, self.frequency
+        ))
+    }
+}
 #[derive(Debug, Tabled)]
 struct Assignment {
     id: i32,
@@ -134,6 +150,17 @@ impl Data for RusqData {
         print_vec(&self.conn, get_persons)
     }
 
+    fn get_persons(&self) -> Result<Vec<Person>, DataError> {
+        let mut person_stmt = self.conn.prepare("SELECT id, name FROM person")?;
+        let person_iter = person_stmt.query_map([], |row| {
+            let id = row.get(0)?;
+            let name: String = row.get(1)?;
+            Ok(Person { id, name })
+        })?;
+
+        let p: Vec<Person> = person_iter.filter_map(|r| r.ok()).collect();
+        Ok(p)
+    }
     fn remove_person(self: &mut Self, index: u8) -> Result<(), DataError> {
         self.conn
             .execute("DELETE FROM person where id = ?1", [index])
@@ -180,6 +207,26 @@ impl Data for RusqData {
         print_vec(&self.conn, get_chores)
     }
 
+    fn get_chores(&self) -> Result<Vec<Chore>, DataError> {
+        let mut chore_stmnt = self
+            .conn
+            .prepare("SELECT id, description, level, frequency FROM chore")?;
+        let chore_iter = chore_stmnt.query_map([], |row| {
+            let id = row.get(0)?;
+            let description = row.get(1)?;
+            let level = row.get(2)?;
+            let frequency = row.get(3)?;
+            Ok(Chore {
+                id,
+                description,
+                level,
+                frequency,
+            })
+        })?;
+
+        let c: Vec<Chore> = chore_iter.filter_map(|r| r.ok()).collect();
+        Ok(c)
+    }
     fn report(self: &Self) -> Result<(), DataError> {
         print_all(&self.conn)
     }
@@ -263,10 +310,9 @@ fn print_all(conn: &Connection) -> Result<(), DataError> {
             .with(Style::rounded())
             .to_string()
     );
-
-    print_vec(conn, get_chores)?;
-    print_vec(conn, get_assignments)
+    Ok(())
 }
+// remove, use method in list_persons
 fn get_persons(conn: &Connection) -> Result<Vec<Person>, DataError> {
     let mut person_stmt = conn.prepare("SELECT id, name FROM person")?;
     let person_iter = person_stmt.query_map([], |row| {

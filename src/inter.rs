@@ -8,24 +8,43 @@ mod data;
 fn main() -> Result<(), anyhow::Error> {
     let mut d = data::db(&PathBuf::from("test.db"));
     inquire::set_global_render_config(get_render_config());
-    let _date = DateSelect::new("Date:").prompt()?;
-    let _person = Select::new("Person:", get_persons(&d)).prompt()?;
-    let _chore = Select::new("Chore:", get_chores(&d)).prompt()?;
+    loop {
+        let _date = DateSelect::new("Date:").prompt()?;
+        let _person = Select::new("Person:", get_persons(&d)).prompt()?;
+        let _chore = Select::new("Chore:", get_chores(&d)).prompt()?;
 
-    Confirm::new(
-        format!(
-            "You will save that {} did {} at {}. Is that correct?",
-            _person, _chore, _date
+        Confirm::new(
+            format!(
+                "You will save that {} did {} at {}. Is that correct?",
+                _person, _chore, _date
+            )
+            .as_str(),
         )
-        .as_str(),
-    )
-    .with_default(true)
-    .prompt()
-    .map(|_| {
-        d.add_task(_person.id, _chore.id, _date.to_string().as_str())
-            .unwrap()
-    })
-    .map_err(|e| anyhow!(e))
+        .with_default(true)
+        .prompt()
+        .map(|_| {
+            d.add_task(_person.id, _chore.id, _date.to_string().as_str())
+                .unwrap()
+        })
+        .map_err(|e| anyhow!(e))?;
+
+        let loopme = Confirm::new("Do you want to add another task?")
+            .with_default(false)
+            .with_help_message("This will loop until you say \"no\"")
+            .prompt();
+
+        match loopme {
+            Ok(true) => println!("again!"),
+            Err(_) => {
+                println!("Problem with answer");
+                break;
+            }
+            Ok(false) => {
+                break;
+            }
+        }
+    }
+    Ok(())
 }
 fn get_chores(d: &impl data::Data) -> Vec<data::Chore> {
     d.get_chores().ok().unwrap_or(vec![])

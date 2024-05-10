@@ -23,72 +23,53 @@ Manage houshold chores using Rust
 
 ## How does it lok like:
 ### Output
+`./chores report`
 ```
-╭───────┬─────────────┬───────┬───────────┬────────────╮
-│ name  │ description │ level │ frequency │ last       │
-├───────┼─────────────┼───────┼───────────┼────────────┤
-│ kasia │ naczynia,   │ 2     │ 1         │ 2024-05-02 │
-│ ziuta │ pranie,     │ 2     │ 1         │ 2024-05-02 │
-╰───────┴─────────────┴───────┴───────────┴────────────╯
-╭────┬───────────────╮
-│ id │ name          │
-├────┼───────────────┤
-│ 1  │ kasia         │
-│ 2  │ ziuta         │
-│ 5  │ tomasz        │
-│ 6  │ wiktor        │
-│ 7  │ dziadek piotr │
-│ 9  │ babcia marta  │
-│ 10 │ kotek mruczek │
-╰────┴───────────────╯
-╭────┬──────────────────────┬───────┬───────────╮
-│ id │ description          │ level │ frequency │
-├────┼──────────────────────┼───────┼───────────┤
-│ 1  │ pranie,              │ 2     │ 1         │
-│ 2  │ naczynia,            │ 2     │ 1         │
-│ 3  │ porządki,            │ 2     │ 1         │
-│ 4  │ zmywarka             │ 2     │ 1         │
-│ 5  │ odkurzanie,          │ 2     │ 7         │
-│ 6  │ prysznic,            │ 2     │ 7         │
-│ 7  │ mycie szafek,        │ 2     │ 7         │
-│ 8  │ mycie zlewu w kuchni │ 2     │ 7         │
-╰────┴──────────────────────┴───────┴───────────╯
-╭────┬───────────┬──────────╮
-│ id │ person_id │ chore_id │
-├────┼───────────┼──────────┤
-│ 1  │ 1         │ 2        │
-│ 2  │ 2         │ 1        │
-│ 3  │ 2         │ 3        │
-╰────┴───────────┴──────────╯
-
+╭───────────────┬──────────────────────┬───────┬───────────┬────────────╮
+│ name          │ description          │ level │ frequency │ last       │
+├───────────────┼──────────────────────┼───────┼───────────┼────────────┤
+│ kasia         │ naczynia,            │ 2     │ 1         │ 2024-05-02 │
+│ ziuta         │ porządki,            │ 2     │ 1         │ 2024-05-02 │
+│ wiktor        │ mycie szafek,        │ 2     │ 7         │ 2024-04-29 │
+│ kotek mruczek │ mycie zlewu w kuchni │ 2     │ 7         │ 2024-05-02 │
+╰───────────────┴──────────────────────┴───────┴───────────┴────────────╯
 ```
-
 ### Usage of clap library:
+```
 Managing household chores with ease
-```
-Usage: chores <COMMAND>
+
+Usage: chores [OPTIONS] <COMMAND>
 
 Commands:
-  person     Perform operation on a person
-  add-chore  Adds a chore with description, level and frequency
-  report     Prints report for all persons, chores and assignments
-  assign     Assigns a person to a chore
-  help       Print this message or the help of the given subcommand(s)
+  person      A command that manages persons in the household
+  chore       A command that manages all chores
+  report      Prints report for all persons, chores and assignments
+  assignment  Assigns a person to a chore
+  task
+  help        Print this message or the help of the given subcommand(s)
 
 Options:
-  -h, --help     Print help
-  -V, --version  Print version
-➜  chores git:(main) ✗ ./chores person
-Perform operation on a person
-
-Usage: chores person <COMMAND>
-
-Commands:
-  add     add a new person
-  remove  remove a person
-  help    Print this message or the help of the given subcommand(s)
-
-Options:
-  -h, --help  Print help
-
+  -d, --dbpath <DBPATH>  [default: test.db]
+  -h, --help             Print help
+  -V, --version          Print version
 ```
+
+# CLI API
+* person 
+    * add --name NAME
+    * remove --index INDEX
+    * list 
+    * help 
+* chore
+    * add --descrioption DESCRIPTION --level LEVEL -f FREQ_DAYS
+    * remove --index INDEX
+    * list 
+    * help 
+* assignment 
+    * add --person PERSON --chore CHORE
+    * remove --index INDEX
+    * list 
+    * help 
+* report 
+* task --person PERSON --chore CHORE --date DATE 
+* help

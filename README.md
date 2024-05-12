@@ -1,6 +1,6 @@
 # rust-chores
-Manage houshold chores using Rust
-
+Manage houshold chores using Rust.
+Experimenting with Rust.
 # Goal
 1. The primary goal is to refresh Rust a bit and create a very basic
 * commandline application ([clap](https://github.com/clap-rs/clap)) that uses 

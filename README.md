@@ -97,4 +97,4 @@ These are currently out of scope (but nice to have):
     - time spent (can use `level` column of `chore` table)
 
 ## To think
-- how ti design interactive flow in declarative way (so that the flow can be freely edited with minimal disruption and changes to the code?)
+- how to design interactive flow in declarative way (so that the flow can be freely edited with minimal disruption and changes to the code?)

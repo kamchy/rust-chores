@@ -5,7 +5,6 @@ use std::fmt::Display;
 use std::fs;
 use std::path::PathBuf;
 use std::result::Result;
-use tabled::Tabled;
 
 #[derive(Debug, thiserror::Error)]
 pub enum DataError {
@@ -57,7 +56,7 @@ impl RusqData {
     }
 }
 
-#[derive(Debug, Tabled)]
+#[derive(Debug)]
 pub struct Person {
     pub(crate) id: i32,
     pub(crate) name: String,
@@ -68,12 +67,12 @@ impl Display for Person {
     }
 }
 
-#[derive(Debug, Tabled)]
+#[derive(Debug)]
 pub struct Chore {
-    pub(crate) id: i32,
-    pub(crate) description: String,
-    level: u8,
-    pub(crate) frequency: u8,
+    pub id: i32,
+    pub description: String,
+    pub level: u8,
+    pub frequency: u8,
 }
 
 impl Display for Chore {
@@ -84,11 +83,11 @@ impl Display for Chore {
         ))
     }
 }
-#[derive(Debug, Tabled)]
+#[derive(Debug)]
 pub struct Assignment {
-    id: i32,
-    person_id: i32,
-    chore_id: i32,
+    pub id: i32,
+    pub person_id: i32,
+    pub chore_id: i32,
 }
 
 /// Implements Data so that it is stored in sqlite database
@@ -276,14 +275,13 @@ fn calc_next_date(last: String, frequency: u8) -> String {
         .unwrap_or("unknown".to_string())
 }
 
-#[derive(Tabled)]
 pub struct Schedule {
-    name: String,
-    description: String,
-    level: u8,
-    frequency: u8,
-    last: String,
-    next: String,
+    pub name: String,
+    pub description: String,
+    pub level: u8,
+    pub frequency: u8,
+    pub last: String,
+    pub next: String,
 }
 
 pub fn db(path: &PathBuf) -> RusqData {

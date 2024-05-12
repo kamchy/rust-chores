@@ -25,14 +25,14 @@ Manage houshold chores using Rust
 ### Output
 `./chores report`
 ```
-╭───────────────┬──────────────────────┬───────┬───────────┬────────────╮
-│ name          │ description          │ level │ frequency │ last       │
-├───────────────┼──────────────────────┼───────┼───────────┼────────────┤
-│ kasia         │ naczynia,            │ 2     │ 1         │ 2024-05-02 │
-│ ziuta         │ porządki,            │ 2     │ 1         │ 2024-05-02 │
-│ wiktor        │ mycie szafek,        │ 2     │ 7         │ 2024-04-29 │
-│ kotek mruczek │ mycie zlewu w kuchni │ 2     │ 7         │ 2024-05-02 │
-╰───────────────┴──────────────────────┴───────┴───────────┴────────────╯
+╭───────────────┬──────────────────────┬───────┬───────────┬────────────┬────────────╮
+│ name          │ description          │ level │ frequency │ last       │ next       │
+├───────────────┼──────────────────────┼───────┼───────────┼────────────┼────────────┤
+│ kasia         │ naczynia,            │ 2     │ 1         │ 2024-05-12 │ 2024-05-13 │
+│ ziuta         │ porządki,            │ 2     │ 1         │ 2024-05-02 │ 2024-05-03 │
+│ wiktor        │ mycie szafek,        │ 2     │ 7         │ 2024-04-29 │ 2024-05-06 │
+│ kotek mruczek │ mycie zlewu w kuchni │ 2     │ 7         │ 2024-05-02 │ 2024-05-09 │
+╰───────────────┴──────────────────────┴───────┴───────────┴────────────┴────────────╯
 ```
 ### Usage of clap library:
 ```
@@ -73,3 +73,28 @@ Options:
 * report 
 * task --person PERSON --chore CHORE --date DATE 
 * help
+
+
+
+# Polishing
+- [ ] make logic and db operations part of separate lib create
+- [ ] make CLI an application create use the lib
+- [ ] when called without arguments, let the app start in interactive mode
+- [ ] make autocompletion work for CLI version
+- [ ] create web version
+
+# Functional additions
+These are currently out of scope (but nice to have):
+- generate printable (pdf) for each person with their montly calendar
+- allow moving chores from one person to other
+  - forever
+  - only temporarily
+- generate historical statistics
+    - expected/done ratio
+    - delays
+    - moves
+    - workload per person
+    - time spent (can use `level` column of `chore` table)
+
+## To think
+- how ti design interactive flow in declarative way (so that the flow can be freely edited with minimal disruption and changes to the code?)

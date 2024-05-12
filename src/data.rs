@@ -1,11 +1,10 @@
-use chrono::Duration;
+use chrono::NaiveDate;
 use rusqlite::params;
 use rusqlite::Connection;
 use std::fmt::Display;
 use std::fs;
 use std::path::PathBuf;
 use std::result::Result;
-use tabled::settings::Style;
 use tabled::Tabled;
 
 #[derive(Debug, thiserror::Error)]
@@ -26,7 +25,6 @@ pub enum DataError {
 }
 pub trait Data {
     fn add_person(&mut self, name: &str) -> Result<(), DataError>;
-    fn list_persons(&self) -> Result<(), DataError>;
     fn get_persons(&self) -> Result<Vec<Person>, DataError>;
     fn remove_person(&mut self, index: u8) -> Result<(), DataError>;
     fn add_chore(
@@ -36,58 +34,25 @@ pub trait Data {
         freq_days: u8,
     ) -> Result<(), DataError>;
     fn remove_chore(&mut self, index: u8) -> Result<(), DataError>;
-    fn list_chores(&self) -> Result<(), DataError>;
 
     fn get_chores(&self) -> Result<Vec<Chore>, DataError>;
-    fn report(self: &Self) -> Result<(), DataError>;
+    fn get_schedules(&self) -> Result<Vec<Schedule>, DataError>;
     /// id could be internal type
     fn assign(self: &mut Self, person_id: i32, chore_id: i32) -> Result<(), DataError>;
-    fn list_assignments(&self) -> Result<(), DataError>;
     fn remove_assignment(&mut self, index: u8) -> Result<(), DataError>;
+
+    fn get_assignments(&self) -> Result<Vec<Assignment>, DataError>;
     fn add_task(&mut self, person_id: i32, chore_id: i32, date: &str) -> Result<(), DataError>;
 }
 
 pub struct RusqData {
     conn: Connection,
 }
+
 impl RusqData {
     fn new(path: &PathBuf) -> Result<Self, DataError> {
         let conn = Connection::open(path)?;
-        conn.execute(
-            "CREATE TABLE  IF NOT EXISTS person(
-                id INTEGER PRIMARY  KEY AUTOINCREMENT,
-                name TEXT UNIQUE NOT NULL
-            ) ",
-            (),
-        )?;
-
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS chore (
-                id INTEGER PRIMARY  KEY AUTOINCREMENT,
-                description TEXT UNIQUE NOT NULL,
-                level INTEGER NOT NULL,
-                frequency INTEGER NOT NULL
-            ) ",
-            (),
-        )?;
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS assignment(
-                id INTEGER PRIMARY  KEY AUTOINCREMENT,
-                person_id INTEGER NOT NULL REFERENCES person(id) ON DELETE CASCADE,
-                chore_id INTEGER NOT NULL REFERENCES chore(id) ON DELETE CASCADE
-            ) ",
-            (),
-        )?;
-
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS task(
-                id INTEGER PRIMARY  KEY AUTOINCREMENT,
-                person_id INTEGER NOT NULL REFERENCES person(id) ON DELETE CASCADE,
-                chore_id INTEGER NOT NULL REFERENCES chore(id) ON DELETE CASCADE,
-                done DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-            ) ",
-            (),
-        )?;
+        conn.execute(fs::read_to_string("src/schema.sql")?.as_str(), ())?;
         Ok(RusqData { conn })
     }
 }
@@ -120,16 +85,10 @@ impl Display for Chore {
     }
 }
 #[derive(Debug, Tabled)]
-struct Assignment {
+pub struct Assignment {
     id: i32,
     person_id: i32,
     chore_id: i32,
-}
-fn date_from(d: chrono::DateTime<chrono::Local>, after_days: u8) -> String {
-    let days = Duration::days(after_days as i64);
-    let next_date = d + days;
-    let formatted = next_date.format("%Y-%m-%d");
-    formatted.to_string()
 }
 
 /// Implements Data so that it is stored in sqlite database
@@ -145,9 +104,6 @@ impl Data for RusqData {
             .execute("INSERT INTO person (name) VALUES (?1)", [p.name])
             .map_err(|e| DataError::InsertError(e))
             .map(|_| {})
-    }
-    fn list_persons(&self) -> Result<(), DataError> {
-        print_vec(&self.conn, get_persons)
     }
 
     fn get_persons(&self) -> Result<Vec<Person>, DataError> {
@@ -203,10 +159,6 @@ impl Data for RusqData {
             .map(|_| {})
     }
 
-    fn list_chores(&self) -> Result<(), DataError> {
-        print_vec(&self.conn, get_chores)
-    }
-
     fn get_chores(&self) -> Result<Vec<Chore>, DataError> {
         let mut chore_stmnt = self
             .conn
@@ -226,9 +178,6 @@ impl Data for RusqData {
 
         let c: Vec<Chore> = chore_iter.filter_map(|r| r.ok()).collect();
         Ok(c)
-    }
-    fn report(self: &Self) -> Result<(), DataError> {
-        print_all(&self.conn)
     }
 
     fn assign(self: &mut Self, person_id: i32, chore_id: i32) -> Result<(), DataError> {
@@ -256,15 +205,11 @@ impl Data for RusqData {
             })
             .map(|_| {})
     }
-    fn list_assignments(&self) -> Result<(), DataError> {
-        print_vec(&self.conn, get_assignments)
-    }
     fn add_task(&mut self, person_id: i32, chore_id: i32, date: &str) -> Result<(), DataError> {
         if let Ok(_) = chrono::NaiveDate::parse_from_str(date, "%Y-%m-%d") {
             self.conn
                 .execute(
-                    "insert into task(person_id, chore_id, done) 
-            values(?1, ?2, ?3)",
+                    "insert into task(person_id, chore_id, done)  values(?1, ?2, ?3)",
                     params![person_id, chore_id, date],
                 )
                 .map_err(|e| DataError::InsertError(e))
@@ -276,101 +221,112 @@ impl Data for RusqData {
             )))
         }
     }
+    fn get_assignments(&self) -> Result<Vec<Assignment>, DataError> {
+        let mut assignment_stmnt = self
+            .conn
+            .prepare("SELECT id, person_id, chore_id FROM assignment")?;
+        let assignment_iter = assignment_stmnt.query_map([], |row| {
+            let id = row.get(0)?;
+            let person_id = row.get(1)?;
+            let chore_id = row.get(2)?;
+            Ok(Assignment {
+                id,
+                person_id,
+                chore_id,
+            })
+        })?;
+        let c: Vec<Assignment> = assignment_iter.filter_map(|r| r.ok()).collect();
+        Ok(c)
+    }
+
+    fn get_schedules(&self) -> Result<Vec<Schedule>, DataError> {
+        let mut stmt = self
+            .conn
+            .prepare(fs::read_to_string("src/report.sql")?.as_str())?;
+
+        let iter = stmt.query_map([], |row| {
+            let name = row.get(0)?;
+            let description = row.get(1)?;
+            let level = row.get(2)?;
+            let frequency: u8 = row.get(3)?;
+            let last: String = row.get(4)?;
+
+            Ok(Schedule {
+                name,
+                description,
+                level,
+                frequency,
+                last: last.clone(),
+                next: calc_next_date(last, frequency),
+            })
+        })?;
+
+        let mut schedules = Vec::new();
+        for s in iter {
+            schedules.push(s?);
+        }
+        Ok(schedules)
+    }
 }
+
+fn calc_next_date(last: String, frequency: u8) -> String {
+    NaiveDate::parse_from_str(last.as_str(), "%Y-%m-%d")
+        .map(|d| d + chrono::Days::new(frequency.into()))
+        .map(|nd| nd.to_string())
+        .unwrap_or("unknown".to_string())
+}
+
 #[derive(Tabled)]
-struct Schedule {
+pub struct Schedule {
     name: String,
     description: String,
     level: u8,
     frequency: u8,
     last: String,
-}
-fn print_all(conn: &Connection) -> Result<(), DataError> {
-    let mut stmt = conn.prepare(fs::read_to_string("src/report.sql")?.as_str())?;
-
-    let iter = stmt.query_map([], |row| {
-        let name = row.get(0)?;
-        let description = row.get(1)?;
-        let level = row.get(2)?;
-        let frequency = row.get(3)?;
-        let last = row.get(4)?;
-
-        Ok(Schedule {
-            name,
-            description,
-            level,
-            frequency,
-            last,
-        })
-    })?;
-    let report: Vec<_> = iter.filter_map(|r| r.ok()).collect();
-    println!(
-        "{}",
-        tabled::Table::new(report)
-            .with(Style::rounded())
-            .to_string()
-    );
-    Ok(())
-}
-// remove, use method in list_persons
-fn get_persons(conn: &Connection) -> Result<Vec<Person>, DataError> {
-    let mut person_stmt = conn.prepare("SELECT id, name FROM person")?;
-    let person_iter = person_stmt.query_map([], |row| {
-        let id = row.get(0)?;
-        let name: String = row.get(1)?;
-        Ok(Person { id, name })
-    })?;
-
-    let p: Vec<Person> = person_iter.filter_map(|r| r.ok()).collect();
-    Ok(p)
-}
-
-fn get_chores(conn: &Connection) -> Result<Vec<Chore>, DataError> {
-    let mut chore_stmnt = conn.prepare("SELECT id, description, level, frequency FROM chore")?;
-    let chore_iter = chore_stmnt.query_map([], |row| {
-        let id = row.get(0)?;
-        let description = row.get(1)?;
-        let level = row.get(2)?;
-        let frequency = row.get(3)?;
-        Ok(Chore {
-            id,
-            description,
-            level,
-            frequency,
-        })
-    })?;
-
-    let c: Vec<Chore> = chore_iter.filter_map(|r| r.ok()).collect();
-    Ok(c)
-}
-
-fn get_assignments(conn: &Connection) -> Result<Vec<Assignment>, DataError> {
-    let mut assignment_stmnt = conn.prepare("SELECT id, person_id, chore_id FROM assignment")?;
-    let assignment_iter = assignment_stmnt.query_map([], |row| {
-        let id = row.get(0)?;
-        let person_id = row.get(1)?;
-        let chore_id = row.get(2)?;
-        Ok(Assignment {
-            id,
-            person_id,
-            chore_id,
-        })
-    })?;
-    let a: Vec<Assignment> = assignment_iter.filter_map(|r| r.ok()).collect();
-    Ok(a)
-}
-fn print_vec<'a, T: Tabled>(
-    conn: &'a Connection,
-    f: fn(&'a Connection) -> Result<Vec<T>, DataError>,
-) -> Result<(), DataError> {
-    let v = f(conn)?;
-    println!(
-        "{}",
-        tabled::Table::new(v).with(Style::rounded()).to_string()
-    );
-    Ok(())
+    next: String,
 }
 
 pub fn db(path: &PathBuf) -> RusqData {
     RusqData::new(path).unwrap()
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use std::env::temp_dir;
+
+    #[test]
+    fn test_db_creation() -> Result<(), DataError> {
+        let mut dbfile = temp_dir();
+        dbfile.push("testdb");
+        let _rd = RusqData::new(&dbfile);
+
+        let conn = Connection::open(dbfile)?;
+
+        // Query the sqlite_master table to check for the existence of tables
+        let mut stmt = conn.prepare("SELECT name FROM sqlite_master WHERE type='table'")?;
+        let table_names: Vec<String> = stmt
+            .query_map([], |row| row.get(0))?
+            .filter_map(|result| result.ok())
+            .collect();
+
+        for name in ["person", "chore", "assignment", "task"] {
+            let expected = name.to_owned();
+            assert_eq!(true, table_names.contains(&expected));
+        }
+        assert!(false);
+        Ok(())
+    }
+
+    #[test]
+    fn test_row_inserted() -> Result<(), DataError> {
+        let mut dbfile = temp_dir();
+        dbfile.push("testdb");
+        let rd = RusqData::new(&dbfile);
+        assert!(rd.is_ok());
+
+        let res = rd.map(|mut r| r.add_person("anna")).ok();
+        assert!(res.is_some());
+        Ok(())
+    }
 }
